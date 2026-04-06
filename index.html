@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Controle de Limpezas — Clínica OSE</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: system-ui, sans-serif; background: #f4f4f0; color: #1a1a18; min-height: 100vh; }
+  header { background: #0F6E56; color: #fff; padding: 1rem 1.5rem; }
+  header h1 { font-size: 18px; font-weight: 500; }
+  header p { font-size: 13px; opacity: 0.8; margin-top: 2px; }
+  .container { max-width: 900px; margin: 0 auto; padding: 1.25rem 1rem; }
+
+  .top-bar { display: flex; gap: 8px; margin-bottom: 1rem; flex-wrap: wrap; }
+  .top-bar input, .top-bar select {
+    flex: 1; min-width: 140px; font-size: 14px; padding: 7px 11px;
+    border: 1px solid #ccc; border-radius: 8px; background: #fff; color: #1a1a18;
+  }
+  .btn {
+    padding: 7px 16px; font-size: 13px; font-weight: 500;
+    border: 1px solid #ccc; border-radius: 8px;
+    background: transparent; color: #1a1a18; cursor: pointer; white-space: nowrap;
+  }
+  .btn:hover { background: #f0f0ec; }
+  .btn-add { border-color: #0F6E56; color: #0F6E56; }
+  .btn-add:hover { background: #E1F5EE; }
+
+  .metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 1rem; }
+  .metric { background: #fff; border-radius: 8px; padding: 10px 14px; border: 1px solid #e5e5e0; }
+  .metric .label { font-size: 12px; color: #888; margin-bottom: 4px; }
+  .metric .val { font-size: 24px; font-weight: 500; }
+  .val.verde { color: #0F6E56; }
+  .val.amarelo { color: #854F0B; }
+  .val.vermelho { color: #A32D2D; }
+
+  .filters { display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap; }
+  .pill {
+    padding: 4px 13px; font-size: 12px; border-radius: 999px;
+    border: 1px solid #ccc; cursor: pointer; background: #fff; color: #666;
+  }
+  .pill.active { background: #1D9E75; color: #fff; border-color: #1D9E75; }
+  .pill.f-aguardando.active { background: #BA7517; border-color: #BA7517; }
+  .pill.f-atrasado.active { background: #A32D2D; border-color: #A32D2D; }
+
+  .card { background: #fff; border-radius: 12px; border: 1px solid #e5e5e0; overflow: hidden; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th {
+    text-align: left; padding: 8px 12px;
+    font-size: 11px; font-weight: 500; color: #888;
+    border-bottom: 1px solid #eee; text-transform: uppercase; letter-spacing: 0.04em;
+    background: #fafaf8;
+  }
+  td { padding: 10px 12px; border-bottom: 1px solid #f0f0ec; vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: #fafaf8; }
+
+  .badge { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 11px; font-weight: 500; }
+  .badge.liberada { background: #E1F5EE; color: #085041; }
+  .badge.aguardando { background: #FAEEDA; color: #633806; }
+  .badge.atrasado { background: #FCEBEB; color: #791F1F; }
+
+  .del-btn { background: none; border: none; cursor: pointer; color: #aaa; font-size: 14px; padding: 3px 7px; border-radius: 4px; }
+  .del-btn:hover { background: #fef0f0; color: #A32D2D; }
+
+  .empty { text-align: center; padding: 2.5rem; color: #aaa; font-size: 13px; }
+
+  /* Modal */
+  .modal-bg {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,0.35); align-items: center; justify-content: center; z-index: 10;
+  }
+  .modal-bg.open { display: flex; }
+  .modal {
+    background: #fff; border-radius: 14px; border: 1px solid #ddd;
+    padding: 1.5rem; width: 340px; max-width: 95%;
+  }
+  .modal h3 { font-size: 15px; font-weight: 500; margin-bottom: 14px; }
+  .modal label { font-size: 12px; color: #888; display: block; margin-bottom: 3px; margin-top: 10px; }
+  .modal input {
+    width: 100%; font-size: 13px; padding: 7px 11px;
+    border: 1px solid #ccc; border-radius: 8px; background: #fff; color: #1a1a18;
+  }
+  .modal-btns { display: flex; gap: 8px; margin-top: 16px; justify-content: flex-end; }
+
+  @media (max-width: 600px) {
+    .metrics { grid-template-columns: repeat(3, 1fr); gap: 6px; }
+    .metric .val { font-size: 20px; }
+    td:nth-child(3) { display: none; }
+    th:nth-child(3) { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Controle de Limpezas Odontológicas</h1>
+  <p>Plano odontológico — liberação a cada 6 meses</p>
+</header>
+
+<div class="container">
+  <div class="top-bar">
+    <input id="search" type="text" placeholder="Buscar paciente..." oninput="render()" />
+    <button class="btn btn-add" onclick="openModal()">+ Adicionar paciente</button>
+  </div>
+
+  <div class="metrics" id="metrics"></div>
+
+  <div class="filters">
+    <button class="pill active" data-f="todos" onclick="setFilter('todos',this)">Todos</button>
+    <button class="pill f-liberada" data-f="liberada" onclick="setFilter('liberada',this)">Limpeza liberada</button>
+    <button class="pill f-aguardando" data-f="aguardando" onclick="setFilter('aguardando',this)">Aguardando</button>
+    <button class="pill f-atrasado" data-f="atrasado" onclick="setFilter('atrasado',this)">Sem retorno (+1 ano)</button>
+  </div>
+
+  <div class="card">
+    <table>
+      <thead>
+        <tr>
+          <th>Paciente</th>
+          <th>Última limpeza</th>
+          <th>Próxima liberação</th>
+          <th>Status</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+    <div id="empty" class="empty" style="display:none">Nenhum paciente encontrado.</div>
+  </div>
+</div>
+
+<!-- Modal -->
+<div class="modal-bg" id="modal-bg" onclick="if(event.target===this)closeModal()">
+  <div class="modal">
+    <h3>Adicionar paciente</h3>
+    <label>Nome completo</label>
+    <input id="m-name" type="text" placeholder="Ex: Maria da Silva" />
+    <label>Data da última limpeza</label>
+    <input id="m-date" type="date" />
+    <div class="modal-btns">
+      <button class="btn" onclick="closeModal()">Cancelar</button>
+      <button class="btn btn-add" onclick="addPatient()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const DAY = 86400000;
+let patients = JSON.parse(localStorage.getItem('dental_patients') || 'null') || [];
+let nextId = patients.length ? Math.max(...patients.map(p=>p.id)) + 1 : 1;
+let filter = 'todos';
+
+function save() { localStorage.setItem('dental_patients', JSON.stringify(patients)); }
+
+function getStatus(lastClean) {
+  const last = new Date(lastClean + 'T00:00:00');
+  const now = new Date();
+  const diffDays = Math.floor((now - last) / DAY);
+  const next = new Date(last.getTime() + 180 * DAY);
+  if (diffDays >= 365) return 'atrasado';
+  if (now >= next) return 'liberada';
+  return 'aguardando';
+}
+
+function fmtDate(str) {
+  if (!str) return '-';
+  const [y,m,d] = str.split('-');
+  return d+'/'+m+'/'+y;
+}
+
+function nextRelease(lastClean) {
+  const last = new Date(lastClean + 'T00:00:00');
+  const next = new Date(last.getTime() + 180 * DAY);
+  const now = new Date();
+  const diffDays = Math.floor((now - last) / DAY);
+  if (diffDays >= 365) return 'Há mais de 1 ano sem retorno';
+  if (now >= next) return 'Liberada agora';
+  const diff = Math.ceil((next - now) / DAY);
+  return 'Em ' + diff + ' dias (' + fmtDate(next.toISOString().split('T')[0]) + ')';
+}
+
+function setFilter(f, el) {
+  filter = f;
+  document.querySelectorAll('.pill').forEach(p => p.classList.remove('active'));
+  el.classList.add('active');
+  render();
+}
+
+function render() {
+  const q = document.getElementById('search').value.toLowerCase();
+  let list = patients.filter(p => p.name.toLowerCase().includes(q));
+  if (filter !== 'todos') list = list.filter(p => getStatus(p.lastClean) === filter);
+
+  const counts = { liberada: 0, aguardando: 0, atrasado: 0 };
+  patients.forEach(p => counts[getStatus(p.lastClean)]++);
+
+  document.getElementById('metrics').innerHTML =
+    '<div class="metric"><div class="label">Limpeza liberada</div><div class="val verde">'+counts.liberada+'</div></div>' +
+    '<div class="metric"><div class="label">Aguardando 6 meses</div><div class="val amarelo">'+counts.aguardando+'</div></div>' +
+    '<div class="metric"><div class="label">Sem retorno +1 ano</div><div class="val vermelho">'+counts.atrasado+'</div></div>';
+
+  const labels = { liberada: 'Limpeza liberada', aguardando: 'Aguardando', atrasado: 'Sem retorno +1 ano' };
+  const tbody = document.getElementById('tbody');
+  tbody.innerHTML = list.map(p => {
+    const st = getStatus(p.lastClean);
+    return '<tr>' +
+      '<td style="font-weight:500">'+p.name+'</td>' +
+      '<td>'+fmtDate(p.lastClean)+'</td>' +
+      '<td style="font-size:12px;color:#888">'+nextRelease(p.lastClean)+'</td>' +
+      '<td><span class="badge '+st+'">'+labels[st]+'</span></td>' +
+      '<td><button class="del-btn" onclick="del('+p.id+')">✕</button></td>' +
+      '</tr>';
+  }).join('');
+  document.getElementById('empty').style.display = list.length ? 'none' : 'block';
+}
+
+function del(id) {
+  if (!confirm('Remover paciente?')) return;
+  patients = patients.filter(p => p.id !== id);
+  save(); render();
+}
+
+function openModal() {
+  document.getElementById('m-name').value = '';
+  document.getElementById('m-date').value = new Date().toISOString().split('T')[0];
+  document.getElementById('modal-bg').classList.add('open');
+  setTimeout(() => document.getElementById('m-name').focus(), 100);
+}
+
+function closeModal() {
+  document.getElementById('modal-bg').classList.remove('open');
+}
+
+function addPatient() {
+  const name = document.getElementById('m-name').value.trim();
+  const date = document.getElementById('m-date').value;
+  if (!name || !date) { alert('Preencha o nome e a data.'); return; }
+  patients.push({ id: nextId++, name, lastClean: date });
+  save(); closeModal(); render();
+}
+
+render();
+</script>
+</body>
+</html>
