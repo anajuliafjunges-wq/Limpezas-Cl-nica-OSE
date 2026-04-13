@@ -1,5 +1,3 @@
-# Limpezas-Cl-nica-OSE
-Um sistema de acompanhamento de limpezas com classificação por status.
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -58,20 +56,10 @@ Um sistema de acompanhamento de limpezas com classificação por status.
   .modal input { width: 100%; font-size: 13px; padding: 7px 11px; border: 1px solid #ccc; border-radius: 8px; background: #fff; color: #1a1a18; }
   .modal-btns { display: flex; gap: 8px; margin-top: 16px; justify-content: flex-end; }
   #print-area { display: none; }
-
   @media print {
     body * { visibility: hidden; }
     #print-area, #print-area * { visibility: visible; }
-    #print-area {
-      display: block !important;
-      position: absolute;
-      top: 0; left: 0;
-      width: 100%;
-      padding: 1.5rem;
-      font-family: system-ui, sans-serif;
-      font-size: 13px;
-      color: #000;
-    }
+    #print-area { display: block !important; position: absolute; top: 0; left: 0; width: 100%; padding: 1.5rem; font-family: system-ui, sans-serif; font-size: 13px; color: #000; }
     .print-header { margin-bottom: 1.5rem; border-bottom: 2px solid #0F6E56; padding-bottom: 0.75rem; }
     .print-header h1 { font-size: 18px; font-weight: 600; color: #0F6E56; }
     .print-header p { font-size: 12px; color: #555; margin-top: 3px; }
@@ -84,7 +72,6 @@ Um sistema de acompanhamento de limpezas com classificação por status.
     .print-row .pphone { color: #0F6E56; }
     .print-empty { font-size: 12px; color: #aaa; padding: 6px 0; }
   }
-
   @media (max-width: 600px) { .metrics { grid-template-columns: repeat(2, 1fr); } }
 </style>
 </head>
@@ -131,7 +118,6 @@ Um sistema de acompanhamento de limpezas com classificação por status.
 
 <div id="print-area"></div>
 
-<!-- Modal Adicionar -->
 <div class="modal-bg" id="modal-bg" onclick="if(event.target===this)closeModal()">
   <div class="modal">
     <h3>Adicionar paciente</h3>
@@ -150,36 +136,33 @@ Um sistema de acompanhamento de limpezas com classificação por status.
 
 <script>
 const DAY = 86400000;
-let patients = JSON.parse(localStorage.getItem('dental_v2') || 'null') || [];
+
+// Carrega pacientes — compatível com chave antiga e nova
+let patients = JSON.parse(localStorage.getItem('dental_v2') || localStorage.getItem('dental_patients') || 'null') || [];
 let nextId = patients.length ? Math.max(...patients.map(p => p.id)) + 1 : 1;
 let filter = 'todos';
 
 function save() { localStorage.setItem('dental_v2', JSON.stringify(patients)); }
 
-function getStatus(lastClean) {
-  const last = new Date(lastClean + 'T00:00:00');
-  const now = new Date();
-  const diffDays = Math.floor((now - last) / DAY);
-  const next = new Date(last.getTime() + 180 * DAY);
+// Retorna a data da última limpeza independente do nome do campo
+function getDate(p) {
+  return p.lastClean || p.last_clean || '';
+}
+
+function diasParaLiberar(p) {
+  const d = getDate(p);
+  if (!d) return 9999;
+  const next = new Date(d + 'T00:00:00').getTime() + 180 * DAY;
+  return Math.ceil((next - Date.now()) / DAY);
+}
+
+function getStatus(p) {
+  const d = getDate(p);
+  if (!d) return 'atrasado';
+  const diffDays = Math.floor((Date.now() - new Date(d + 'T00:00:00').getTime()) / DAY);
   if (diffDays >= 365) return 'atrasado';
-  if (now >= next) return 'liberada';
+  if (diasParaLiberar(p) <= 0) return 'liberada';
   return 'aguardando';
-}
-
-// Retorna quantos dias faltam para liberação (negativo = já passou / atrasado)
-function diasParaLiberar(lastClean) {
-  const last = new Date(lastClean + 'T00:00:00');
-  const next = new Date(last.getTime() + 180 * DAY);
-  const now = new Date();
-  return Math.ceil((next - now) / DAY);
-}
-
-function sortPacientes(lista) {
-  return lista.slice().sort((a, b) => {
-    const da = diasParaLiberar(a.lastClean);
-    const db = diasParaLiberar(b.lastClean);
-    return da - db; // crescente: quem libera mais cedo aparece primeiro
-  });
 }
 
 function fmtDate(str) {
@@ -188,22 +171,19 @@ function fmtDate(str) {
   return d + '/' + m + '/' + y;
 }
 
-function nextRelease(lastClean) {
-  const dias = diasParaLiberar(lastClean);
-  const next = new Date(new Date(lastClean + 'T00:00:00').getTime() + 180 * DAY);
-  const diffDays = Math.floor((new Date() - new Date(lastClean + 'T00:00:00')) / DAY);
+function nextReleaseLabel(p) {
+  const d = getDate(p);
+  if (!d) return 'Sem data';
+  const diffDays = Math.floor((Date.now() - new Date(d + 'T00:00:00').getTime()) / DAY);
   if (diffDays >= 365) return 'Há mais de 1 ano';
+  const dias = diasParaLiberar(p);
   if (dias <= 0) return '✅ Liberada';
-  return 'Em ' + dias + ' dia' + (dias > 1 ? 's' : '') + ' (' + fmtDate(next.toISOString().split('T')[0]) + ')';
+  const nextDate = new Date(new Date(d + 'T00:00:00').getTime() + 180 * DAY);
+  return 'Em ' + dias + ' dia' + (dias > 1 ? 's' : '') + ' (' + fmtDate(nextDate.toISOString().split('T')[0]) + ')';
 }
 
-function confirmarLimpeza(id) {
-  const p = patients.find(x => x.id === id);
-  if (!p) return;
-  const hoje = new Date().toISOString().split('T')[0];
-  if (!confirm('Confirmar que ' + p.name + ' realizou a limpeza hoje (' + fmtDate(hoje) + ')?\n\nA contagem de 6 meses será reiniciada.')) return;
-  p.lastClean = hoje;
-  save(); render();
+function sortLista(lista) {
+  return lista.slice().sort((a, b) => diasParaLiberar(a) - diasParaLiberar(b));
 }
 
 function setFilter(f, el) {
@@ -218,13 +198,11 @@ function render() {
   let list = patients.filter(p =>
     p.name.toLowerCase().includes(q) || (p.phone && p.phone.includes(q))
   );
-  if (filter !== 'todos') list = list.filter(p => getStatus(p.lastClean) === filter);
-
-  // Ordena por dias para liberação (crescente)
-  list = sortPacientes(list);
+  if (filter !== 'todos') list = list.filter(p => getStatus(p) === filter);
+  list = sortLista(list);
 
   const counts = { liberada: 0, aguardando: 0, atrasado: 0 };
-  patients.forEach(p => counts[getStatus(p.lastClean)]++);
+  patients.forEach(p => counts[getStatus(p)]++);
 
   document.getElementById('metrics').innerHTML =
     '<div class="metric"><div class="label">Total de pacientes</div><div class="val cinza">' + patients.length + '</div></div>' +
@@ -235,13 +213,14 @@ function render() {
   const labels = { liberada: 'Limpeza liberada', aguardando: 'Aguardando', atrasado: 'Sem retorno +1 ano' };
   const tbody = document.getElementById('tbody');
   tbody.innerHTML = list.map(p => {
-    const st = getStatus(p.lastClean);
+    const st = getStatus(p);
     const showBtn = st === 'liberada' || st === 'atrasado';
+    const d = getDate(p);
     return '<tr>' +
       '<td style="font-weight:500">' + p.name + '</td>' +
       '<td style="color:#0F6E56">' + (p.phone || '<span style="color:#ccc">—</span>') + '</td>' +
-      '<td>' + fmtDate(p.lastClean) + '</td>' +
-      '<td style="font-size:12px;color:#888">' + nextRelease(p.lastClean) + '</td>' +
+      '<td>' + fmtDate(d) + '</td>' +
+      '<td style="font-size:12px;color:#888">' + nextReleaseLabel(p) + '</td>' +
       '<td><span class="badge ' + st + '">' + labels[st] + '</span></td>' +
       '<td>' + (showBtn ? '<button class="action-btn ok" onclick="confirmarLimpeza(' + p.id + ')">✓ Realizada hoje</button>' : '<span style="font-size:12px;color:#ccc">—</span>') + '</td>' +
       '<td><button class="del-btn" onclick="del(' + p.id + ')">✕</button></td>' +
@@ -249,6 +228,16 @@ function render() {
   }).join('');
 
   document.getElementById('empty').style.display = list.length ? 'none' : 'block';
+}
+
+function confirmarLimpeza(id) {
+  const p = patients.find(x => x.id === id);
+  if (!p) return;
+  const hoje = new Date().toISOString().split('T')[0];
+  if (!confirm('Confirmar que ' + p.name + ' realizou a limpeza hoje (' + fmtDate(hoje) + ')?\n\nA contagem de 6 meses será reiniciada.')) return;
+  p.lastClean = hoje;
+  p.last_clean = hoje;
+  save(); render();
 }
 
 function del(id) {
@@ -280,32 +269,23 @@ function addPatient() {
 function imprimirRelatorio() {
   const now = new Date();
   const dataGeracao = 'Gerado em ' + now.toLocaleDateString('pt-BR') + ' às ' + now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-
-  // Todas as categorias também ordenadas por dias para liberação
-  const liberados  = sortPacientes(patients.filter(p => getStatus(p.lastClean) === 'liberada'));
-  const aguardando = sortPacientes(patients.filter(p => getStatus(p.lastClean) === 'aguardando'));
-  const atrasados  = sortPacientes(patients.filter(p => getStatus(p.lastClean) === 'atrasado'));
+  const liberados  = sortLista(patients.filter(p => getStatus(p) === 'liberada'));
+  const aguardando = sortLista(patients.filter(p => getStatus(p) === 'aguardando'));
+  const atrasados  = sortLista(patients.filter(p => getStatus(p) === 'atrasado'));
 
   function secao(titulo, lista, detalhe) {
     let html = '<div class="print-section"><h2>' + titulo + ' (' + lista.length + ')</h2>';
-    if (!lista.length) {
-      html += '<p class="print-empty">Nenhum paciente nesta categoria.</p>';
-    } else {
-      lista.forEach(p => {
-        html += '<div class="print-row">' +
-          '<div><div class="pname">' + p.name + '</div><div class="pdetail">' + detalhe(p) + '</div></div>' +
-          '<div class="pphone">' + (p.phone || '—') + '</div>' +
-          '</div>';
-      });
-    }
-    html += '</div>';
-    return html;
+    if (!lista.length) html += '<p class="print-empty">Nenhum paciente nesta categoria.</p>';
+    else lista.forEach(p => {
+      html += '<div class="print-row"><div><div class="pname">' + p.name + '</div><div class="pdetail">' + detalhe(p) + '</div></div><div class="pphone">' + (p.phone || '—') + '</div></div>';
+    });
+    return html + '</div>';
   }
 
   let html = '<div class="print-header"><h1>Relatório de Limpezas — Clínica OSE</h1><p>' + dataGeracao + ' &nbsp;|&nbsp; Total: ' + patients.length + ' pacientes</p></div>';
-  html += secao('✅ Limpeza liberada', liberados, p => 'Última limpeza: ' + fmtDate(p.lastClean));
-  html += secao('⏳ Aguardando liberação', aguardando, p => nextRelease(p.lastClean));
-  html += secao('🔴 Sem retorno há mais de 1 ano', atrasados, p => 'Última limpeza: ' + fmtDate(p.lastClean));
+  html += secao('✅ Limpeza liberada', liberados, p => 'Última limpeza: ' + fmtDate(getDate(p)));
+  html += secao('⏳ Aguardando liberação', aguardando, p => nextReleaseLabel(p));
+  html += secao('🔴 Sem retorno há mais de 1 ano', atrasados, p => 'Última limpeza: ' + fmtDate(getDate(p)));
 
   document.getElementById('print-area').innerHTML = html;
   window.print();
